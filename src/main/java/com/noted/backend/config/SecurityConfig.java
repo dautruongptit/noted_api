@@ -3,6 +3,7 @@ package com.noted.backend.config;
 import com.noted.backend.security.JwtAuthenticationFilter;
 import com.noted.backend.security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -23,6 +25,7 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
+@Slf4j
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -58,8 +61,20 @@ public class SecurityConfig {
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2LoginSuccessHandler)
-                        .failureHandler((request, response, exception) ->
-                                response.sendRedirect(frontendRedirectUrl + "?error=login_failed"))
+                        .failureHandler((request, response, exception) -> {
+                            // Spring MAC DINH khong in ly do that bai (log chi co ten
+                            // "OAuth2AuthenticationException"), nen loi doi token Google
+                            // (sai client_secret, redirect_uri lech, ma het han...) khong
+                            // the chan doan duoc tu log. In ra ma loi OAuth + mo ta.
+                            // KHONG in toan bo exception: message co the chua tham so
+                            // request, chi lay ma loi va mo ta ngan.
+                            String chiTiet = exception instanceof OAuth2AuthenticationException oae
+                                    ? oae.getError().getErrorCode() + " - " + oae.getError().getDescription()
+                                    : exception.getClass().getSimpleName();
+                            log.warn("Dang nhap OAuth2 that bai: {} | goc: {}", chiTiet,
+                                    exception.getCause() == null ? "(khong co)" : exception.getCause().getMessage());
+                            response.sendRedirect(frontendRedirectUrl + "?error=login_failed");
+                        })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
