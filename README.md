@@ -292,6 +292,19 @@ IP/localhost) - `noted-api` còn nối vào network ngoài `shared-db-network`. 
 `dist/` và serve qua nginx ở port `8200` (xem [`web`](../web/README.md)), nginx reverse-proxy
 `/api/**` sang `noted-api:8210`. Thư mục `/data/noted/notes` trên host phải cho uid 1001 ghi được
 (`chown -R 1001:1001 /data/noted/notes`) vì container chạy non-root.
+
+Production qua Cloudflare Tunnel (ingress của `cloudflared`):
+
+```yaml
+  - hostname: noted.thongtinchinhhieu.site
+    service: http://localhost:8200      # noted-web
+  - hostname: noted-api.thongtinchinhhieu.site
+    service: http://localhost:8210      # noted-api
+```
+
+Các URL trong `.env` (`FRONTEND_REDIRECT_URL`, `ALLOWED_ORIGINS`, `DRIVE_*`) dùng domain web
+`noted.thongtinchinhhieu.site`; nginx proxy `/api/**` sang `noted-api` nên trình duyệt luôn same-origin.
+Nhớ cập nhật "Authorized redirect URIs" trong Google Cloud Console theo domain này.
 Nếu chạy frontend bằng `pnpm dev` trực tiếp (không qua nginx), nhớ khớp `ALLOWED_ORIGINS` +
 `FRONTEND_REDIRECT_URL`/`DRIVE_FRONTEND_CALLBACK_URL` trong `.env` với đúng port frontend đang chạy
 (mặc định quy ước 8445).
