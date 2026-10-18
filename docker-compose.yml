@@ -5,11 +5,10 @@ networks:
   # web khai bao external va noi vao cung mang. Chay api truoc web.
   internal:
     name: noted-net
-  # mysql8 KHONG duoc quan ly boi file compose nay - no la container co san,
-  # da noi san vao shared-db-network (docker network create shared-db-network
-  # + docker network connect shared-db-network mysql8). Compose chi noi
-  # noted-api vao CUNG network nay de goi duoc mysql8 qua DNS noi
-  # bo cua Docker (host "mysql8"), khong can IP/Tailscale nua.
+  # MySQL (container "infra-mysql") KHONG duoc quan ly boi file compose nay.
+  # Muon goi qua ten container thi infra-mysql phai nam tren network nay
+  # (docker network connect shared-db-network infra-mysql). Neu khong, dat
+  # DB_HOST=<IP host> trong .env de di thang qua IP.
   shared-db-network:
     external: true
 
@@ -28,12 +27,13 @@ services:
       # "env_file:", nen neu ghi thang gia tri o day, no se GHI DE moi gia
       # tri khac trong .env, du ban co doi gi trong do cung vo ich.
       #
-      # DB_URL dung ten host "mysql8" (KHONG phai IP hay 127.0.0.1) - day la
-      # ten container mysql8 co san tren shared-db-network, Docker DNS noi bo se
-      # tu phan giai ten nay sang IP that cua no. application.yml CHI doc
+      # DB_URL lay host tu bien DB_HOST (mac dinh "infra-mysql" = ten container
+      # MySQL that tren may chu, KHONG con la "mysql8"). Ten nay chi phan giai duoc
+      # neu infra-mysql nam tren shared-db-network; neu khong, dat DB_HOST=100.106.5.35
+      # trong .env de di thang qua IP host. application.yml CHI doc
       # DB_URL/DB_USER/DB_PASSWORD (khong doc DB_HOST/DB_NAME), nen bat buoc
       # phai ghep san thanh URL day du o day.
-      DB_URL: "jdbc:mysql://mysql8:3306/${DB_NAME:-note_text}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true"
+      DB_URL: "jdbc:mysql://${DB_HOST:-infra-mysql}:3306/${DB_NAME:-note_text}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true"
       DB_USER: ${DB_USER:-root}
       DB_PASSWORD: ${DB_PASSWORD:-1234567890}
       SERVER_PORT: ${SERVER_PORT:-8210}

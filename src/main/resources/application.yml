@@ -1,12 +1,12 @@
 server:
-  port: ${SERVER_PORT:8084}
+  port: ${SERVER_PORT:8210}
   forward-headers-strategy: framework
 spring:
   application:
     name: noted-backend
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://100.121.122.102:3306/note_text?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true}
+    url: ${DB_URL:jdbc:mysql://100.106.5.35:3306/note_text?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true}
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:1234567890}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -66,7 +66,7 @@ spring:
       max-request-size: 20MB
 
 app:
-  frontend-redirect-url: ${FRONTEND_REDIRECT_URL:http://localhost:8445/oauth/callback}
+  frontend-redirect-url: ${FRONTEND_REDIRECT_URL:http://localhost:8200/oauth/callback}
   crypto:
     # Base64 cua 32 byte (AES-256). Sinh bang: openssl rand -base64 32
     secret-key: ${CRYPTO_SECRET_KEY}
@@ -116,12 +116,12 @@ app:
     # URL cua CHINH BACKEND nay, phai KHOP CHINH XAC voi URI da khai bao trong
     # Google Cloud Console (OAuth Client -> Authorized redirect URIs), neu
     # khong Google se tu choi voi loi "redirect_uri_mismatch".
-    redirect-uri: ${DRIVE_REDIRECT_URI:http://localhost:8084/api/drive/callback}
+    redirect-uri: ${DRIVE_REDIRECT_URI:http://localhost:8210/api/drive/callback}
 
     # URL cua FRONTEND, noi backend redirect trinh duyet VE sau khi hoan tat
     # (thanh cong hoac that bai) luong ket noi Drive. Neu dung nginx reverse
     # proxy (port 85, xem repo noteText), day chinh la origin cua port do.
-    frontend-callback-url: ${DRIVE_FRONTEND_CALLBACK_URL:http://localhost:8445/drive/callback}
+    frontend-callback-url: ${DRIVE_FRONTEND_CALLBACK_URL:http://localhost:8200/drive/callback}
 
 management:
   endpoints:
