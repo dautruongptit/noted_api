@@ -31,6 +31,13 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
+    // Dang nhap Google that bai: dua nguoi dung VE FRONTEND thay vi de Spring tu
+    // chuyen toi "/login?error" tren chinh domain backend. Backend nay co domain
+    // rieng (noted-api.*) va khong co trang /login, nen mac dinh cua Spring de
+    // nguoi dung roi vao trang trong/404 cua API.
+    @Value("${app.frontend-redirect-url:http://localhost:8200/oauth/callback}")
+    private String frontendRedirectUrl;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -51,6 +58,8 @@ public class SecurityConfig {
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2LoginSuccessHandler)
+                        .failureHandler((request, response, exception) ->
+                                response.sendRedirect(frontendRedirectUrl + "?error=login_failed"))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
