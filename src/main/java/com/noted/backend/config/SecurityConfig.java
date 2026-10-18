@@ -21,12 +21,18 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.Set;
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityConfig {
+
+    private static final Set<String> KNOWN_OAUTH_ERRORS = Set.of(
+            "invalid_client", "invalid_grant", "invalid_request", "invalid_scope",
+            "unauthorized_client", "access_denied", "server_error",
+            "temporarily_unavailable", "invalid_token_response");
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
@@ -62,17 +68,18 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2LoginSuccessHandler)
                         .failureHandler((request, response, exception) -> {
-                            // Spring MAC DINH khong in ly do that bai (log chi co ten
-                            // "OAuth2AuthenticationException"), nen loi doi token Google
-                            // (sai client_secret, redirect_uri lech, ma het han...) khong
-                            // the chan doan duoc tu log. In ra ma loi OAuth + mo ta.
-                            // KHONG in toan bo exception: message co the chua tham so
-                            // request, chi lay ma loi va mo ta ngan.
-                            String chiTiet = exception instanceof OAuth2AuthenticationException oae
-                                    ? oae.getError().getErrorCode() + " - " + oae.getError().getDescription()
-                                    : exception.getClass().getSimpleName();
-                            log.warn("Dang nhap OAuth2 that bai: {} | goc: {}", chiTiet,
-                                    exception.getCause() == null ? "(khong co)" : exception.getCause().getMessage());
+                            String chiTiet;
+                            if (exception instanceof OAuth2AuthenticationException oae) {
+                                String code = oae.getError().getErrorCode();
+                                if (!KNOWN_OAUTH_ERRORS.contains(code)) code = "unknown";
+                                chiTiet = code;
+                            } else {
+                                chiTiet = exception.getClass().getSimpleName();
+                            }
+                            String causeClass = exception.getCause() == null
+                                    ? "(khong co)"
+                                    : exception.getCause().getClass().getSimpleName();
+                            log.warn("Dang nhap OAuth2 that bai: {} | goc: {}", chiTiet, causeClass);
                             response.sendRedirect(frontendRedirectUrl + "?error=login_failed");
                         })
                 )
