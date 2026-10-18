@@ -274,9 +274,9 @@ POST   /api/sync/batch
 
 ```bash
 # mysql8 KHÔNG còn được compose file này tạo/quản lý - giả định container
-# mysql8 đã chạy sẵn (tự chạy tay hoặc từ trước) và đã nối vào shared-network:
-docker network create shared-network        # nếu chưa có
-docker network connect shared-network mysql8   # nếu mysql8 chưa nối vào
+# mysql8 đã chạy sẵn (tự chạy tay hoặc từ trước) và đã nối vào shared-db-network:
+docker network create shared-db-network        # nếu chưa có
+docker network connect shared-db-network mysql8   # nếu mysql8 chưa nối vào
 
 cp .env.example .env
 # Điền GOOGLE_CLIENT_ID/SECRET, JWT_SECRET, CRYPTO_SECRET_KEY, DB_NAME/DB_USER/DB_PASSWORD
@@ -285,10 +285,13 @@ openssl rand -base64 32   # dùng để sinh JWT_SECRET và CRYPTO_SECRET_KEY
 docker compose up -d --build
 ```
 
-Backend chạy tại `http://localhost:8084`, kết nối MySQL qua DNS nội bộ Docker bằng tên
-container `mysql8` (không phải IP/localhost) - cả hai container cùng nối vào network ngoài
-`shared-network`. Frontend build ra `dist/` và serve qua nginx ở port `85` (xem repo
-[`noteText_web`](../noteText_web/README.md)), nginx reverse-proxy `/api/**` sang backend `8084`.
+Dự án theo quy chuẩn deploy mã `82`: container `noted-api` (port `127.0.0.1:8210`) và
+`noted-web` (port `127.0.0.1:8200`), mạng nội bộ `noted-net` (compose của api tạo, nên chạy api
+trước web). Backend kết nối MySQL qua DNS nội bộ Docker bằng tên container `mysql8` (không phải
+IP/localhost) - `noted-api` còn nối vào network ngoài `shared-db-network`. Frontend build ra
+`dist/` và serve qua nginx ở port `8200` (xem [`web`](../web/README.md)), nginx reverse-proxy
+`/api/**` sang `noted-api:8210`. Thư mục `/data/noted/notes` trên host phải cho uid 1001 ghi được
+(`chown -R 1001:1001 /data/noted/notes`) vì container chạy non-root.
 Nếu chạy frontend bằng `pnpm dev` trực tiếp (không qua nginx), nhớ khớp `ALLOWED_ORIGINS` +
 `FRONTEND_REDIRECT_URL`/`DRIVE_FRONTEND_CALLBACK_URL` trong `.env` với đúng port frontend đang chạy
 (mặc định quy ước 8445).
