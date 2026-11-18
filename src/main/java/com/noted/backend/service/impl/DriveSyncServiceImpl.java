@@ -2,6 +2,7 @@ package com.noted.backend.service.impl;
 
 import com.google.api.services.drive.Drive;
 import com.noted.backend.domain.entity.Note;
+import com.noted.backend.domain.entity.NotePendingMerge;
 import com.noted.backend.domain.entity.User;
 import com.noted.backend.domain.enums.SyncState;
 import com.noted.backend.exception.DriveFileNotFoundException;
@@ -364,6 +365,25 @@ public class DriveSyncServiceImpl implements DriveSyncService {
         // lam "baseline" cho pullOneFile() phat hien conflict THAT SU (mat tran
         // B), phan biet voi truong hop local chi don gian dang co sua chua push.
         note.setDriveSyncedContentHash(HashUtil.md5(content));
+        writeSyncedBase(note, content);
+    }
+
+    /**
+     * Ban text da dong bo voi Drive gan nhat ({filePath}.synced) - "ban goc chung"
+     * de hop nhat 3 chieu khi Drive va may nay cung sua doc lap (mat tran B, xem
+     * pullOneFile). Truoc day chi luu MD5 nen khong hop nhat duoc, phai tach ban sao.
+     * Best-effort: ghi loi chi lam mat tran B lui ve "giu ca 2 ban" toan file.
+     */
+    private void writeSyncedBase(Note note, String content) {
+        try {
+            fileStorageService.writeAtomic(syncedBasePath(note), content);
+        } catch (Exception e) {
+            log.warn("Khong ghi duoc ban da dong bo cua note {}: {}", note.getId(), e.getMessage());
+        }
+    }
+
+    static String syncedBasePath(Note note) {
+        return note.getFilePath() + ".synced";
     }
 
     private void markFailed(Note note, Exception e) {
@@ -648,16 +668,24 @@ public class DriveSyncServiceImpl implements DriveSyncService {
             // cu de push binh thuong o lan debounce ke tiep (nhu truoc). Neu
             // Drive DA KHAC baseline -> Drive cung doi DOC LAP trong luc local
             // dang dirty -> CONFLICT THAT: giu local (dang active o may nay)
-            // lam ban chinh (tiep tuc push binh thuong), tach ban Drive thanh 1
-            // note rieng qua co che "giu ca 2 ban" da co (createConflictCopy).
+            // -> HOP NHAT 3 chieu vao CHINH note nay (khong con tach ban sao
+            // "(xung dot ...)"): ban goc = ban da dong bo gan nhat ({path}.synced),
+            // ban moi = ban Drive, trinh duyet gop vao noi dung dang soan. Doan bi
+            // sua o ca 2 noi duoc giu ca 2 ban co dau danh dau.
             boolean driveChangedIndependently = remoteMd5 != null
                     && note.getDriveSyncedContentHash() != null
                     && !remoteMd5.equalsIgnoreCase(note.getDriveSyncedContentHash());
             if (!driveChangedIndependently) return;
 
             String driveContent = googleDriveService.downloadFileContent(drive, driveFile.id());
-            noteService.createConflictCopy(userId, note.getDisplayName(), driveContent);
-            log.info("Phat hien conflict Drive-vs-local-dirty cho note {} - da tach ban Drive thanh note rieng", note.getId());
+            String syncedBase = fileStorageService.read(syncedBasePath(note));
+            yjsDocumentService.submitExternalContent(note, syncedBase, driveContent, NotePendingMerge.Source.DRIVE);
+            // Ban Drive nay da nam trong hang cho hop nhat -> lan pull sau khong bao
+            // lai conflict y het (truoc day moi lan pull lai de them 1 ban sao).
+            note.setDriveSyncedContentHash(remoteMd5);
+            writeSyncedBase(note, driveContent);
+            noteRepository.save(note);
+            log.info("Drive va may nay cung sua note {} - cho hop nhat vao chinh note", note.getId());
             return;
         }
 
@@ -682,7 +710,8 @@ public class DriveSyncServiceImpl implements DriveSyncService {
             note.setDisplayName(driveFile.name());
         }
 
-        String localMd5 = HashUtil.md5(fileStorageService.read(note.getFilePath()));
+        String localContent = fileStorageService.read(note.getFilePath());
+        String localMd5 = HashUtil.md5(localContent);
         if (remoteMd5 != null && remoteMd5.equalsIgnoreCase(localMd5)) {
             // Noi dung khong doi. Chi luu neu ten vua doi - tranh 1 lan ghi DB
             // thua o truong hop that su khong co gi moi.
@@ -697,11 +726,11 @@ public class DriveSyncServiceImpl implements DriveSyncService {
         long bytesWritten = fileStorageService.writeAtomic(note.getFilePath(), content);
         note.setContentSizeBytes(bytesWritten);
         note.setContentHash(HashUtil.sha256(content));
-        // Noi dung tu Drive thay the ban dang co -> tai lieu Yjs khoi tao lai tu
-        // file moi, cac trinh duyet dang mo note bi dong ket noi (4409) va tai lai.
-        // TODO(Module 3): thay bang chuyen text Drive thanh Yjs update gui qua
-        // WebSocket de hop nhat thay vi ghi de.
-        yjsDocumentService.resetDocument(note);
+        // Dua thay doi tu Drive vao tai lieu Yjs dang soan (hop nhat 3 chieu o
+        // trinh duyet) - khong dat lai tai lieu, khong tach ban sao, giu ca chu
+        // dang go chua kip luu.
+        yjsDocumentService.submitExternalContent(note, localContent, content, NotePendingMerge.Source.DRIVE);
+        writeSyncedBase(note, content);
         note.setSyncState(SyncState.SYNCED);
         note.setDriveSyncedAt(LocalDateTime.now());
         note.setDriveSyncAttempts(0);

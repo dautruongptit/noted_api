@@ -69,6 +69,30 @@ public class NoteRoomRegistry {
         }
     }
 
+    /**
+     * 1 ket noi dang mo cua phong tren instance nay: uu tien {@code preferredSessionId}
+     * neu no con mo, khong thi lay bat ky. null = phong trong.
+     */
+    public WebSocketSession findOpenSession(Long noteId, String preferredSessionId) {
+        Set<WebSocketSession> sessions = rooms.get(noteId);
+        if (sessions == null) {
+            return null;
+        }
+        WebSocketSession fallback = null;
+        for (WebSocketSession session : sessions) {
+            if (!session.isOpen()) {
+                continue;
+            }
+            if (session.getId().equals(preferredSessionId)) {
+                return session;
+            }
+            if (fallback == null) {
+                fallback = session;
+            }
+        }
+        return fallback;
+    }
+
     public int localSessionCount(Long noteId) {
         Set<WebSocketSession> sessions = rooms.get(noteId);
         return sessions == null ? 0 : sessions.size();

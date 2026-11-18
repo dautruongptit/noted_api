@@ -1,6 +1,7 @@
 package com.noted.backend.service.impl;
 
 import com.noted.backend.domain.entity.Note;
+import com.noted.backend.domain.entity.NotePendingMerge;
 import com.noted.backend.domain.enums.SyncState;
 import com.noted.backend.dto.request.CreateNoteRequest;
 import com.noted.backend.dto.request.RenameNoteRequest;
@@ -47,8 +48,8 @@ public class NoteServiceImpl implements NoteService {
     private final FileStorageService fileStorageService;
     private final ApplicationEventPublisher eventPublisher;
     // Moi lan GHI DE noi dung tu ngoai luong soan thao cong tac (REST, ghi de
-    // khi trung ten) phai dat lai tai lieu Yjs, neu khong lan snapshot ke tiep
-    // tu trinh duyet se ghi de nguoc noi dung moi bang ban Yjs cu.
+    // khi trung ten) phai dua vao tai lieu Yjs (hop nhat 3 chieu o trinh duyet),
+    // neu khong lan snapshot ke tiep se ghi de nguoc noi dung moi bang ban Yjs cu.
     private final YjsDocumentService yjsDocumentService;
 
     @Override
@@ -85,8 +86,9 @@ public class NoteServiceImpl implements NoteService {
         Optional<Note> existing = noteRepository.findByUserIdAndDisplayNameAndDeletedFalse(userId, displayName);
         if (existing.isPresent()) {
             Note note = existing.get();
+            String previousContent = fileStorageService.read(note.getFilePath());
             writeContentAndUpdateMetadata(note, content);
-            yjsDocumentService.resetDocument(note);
+            yjsDocumentService.submitExternalContent(note, previousContent, content, NotePendingMerge.Source.EXTERNAL);
             note.setSyncState(SyncState.PENDING_DRIVE);
             note.setDirty(true);
             note.setDriveSyncAttempts(0);
@@ -114,10 +116,12 @@ public class NoteServiceImpl implements NoteService {
     public NoteDetailResponse updateContent(Long userId, Long noteId, UpdateContentRequest request) {
         Note note = findOwnedNote(userId, noteId);
 
+        String previousContent = fileStorageService.read(note.getFilePath());
         writeContentAndUpdateMetadata(note, request.content());
-        // Route REST cu (client chua co Yjs, hoac goi tay) ghi de ca noi dung ->
-        // tai lieu Yjs cu khong con khop, phai khoi tao lai tu file moi.
-        yjsDocumentService.resetDocument(note);
+        // Route REST (client chua co Yjs, hang doi offline /api/sync/batch, goi tay):
+        // hop nhat vao tai lieu Yjs dang soan thay vi ghi de/tach ban sao.
+        yjsDocumentService.submitExternalContent(note, previousContent, request.content(),
+                NotePendingMerge.Source.EXTERNAL);
         note.setSyncState(SyncState.PENDING_DRIVE); // moi thay doi -> can day len Drive lai
         note.setDirty(true); // "Auto Save vao DB" xong -> danh dau dirty, cho Debounce Sync xu ly rieng
         note.setDriveSyncAttempts(0);
@@ -173,8 +177,10 @@ public class NoteServiceImpl implements NoteService {
             Note target = collision.get();
             String sourceContent = fileStorageService.read(note.getFilePath());
 
+            String previousTargetContent = fileStorageService.read(target.getFilePath());
             writeContentAndUpdateMetadata(target, sourceContent);
-            yjsDocumentService.resetDocument(target);
+            yjsDocumentService.submitExternalContent(target, previousTargetContent, sourceContent,
+                    NotePendingMerge.Source.EXTERNAL);
             target.setSyncState(SyncState.PENDING_DRIVE);
             target.setDirty(true);
             target.setDriveSyncAttempts(0);

@@ -62,6 +62,7 @@ public class NoteCollabWebSocketHandler extends BinaryWebSocketHandler implement
     private final NoteService noteService;
     private final NoteRoomRegistry roomRegistry;
     private final RoomBroadcaster roomBroadcaster;
+    private final PendingMergeDispatcher pendingMergeDispatcher;
     private final int maxMessageBytes;
     private final int maxSnapshotBytes;
     private final int sendTimeLimitMs;
@@ -72,6 +73,7 @@ public class NoteCollabWebSocketHandler extends BinaryWebSocketHandler implement
                                       NoteService noteService,
                                       NoteRoomRegistry roomRegistry,
                                       RoomBroadcaster roomBroadcaster,
+                                      PendingMergeDispatcher pendingMergeDispatcher,
                                       @Value("${app.collab.max-message-bytes}") int maxMessageBytes,
                                       @Value("${app.storage.max-file-size-bytes}") int maxSnapshotBytes,
                                       @Value("${app.collab.send-time-limit-ms}") int sendTimeLimitMs,
@@ -81,6 +83,7 @@ public class NoteCollabWebSocketHandler extends BinaryWebSocketHandler implement
         this.noteService = noteService;
         this.roomRegistry = roomRegistry;
         this.roomBroadcaster = roomBroadcaster;
+        this.pendingMergeDispatcher = pendingMergeDispatcher;
         this.maxMessageBytes = maxMessageBytes;
         this.maxSnapshotBytes = maxSnapshotBytes;
         this.sendTimeLimitMs = sendTimeLimitMs;
@@ -136,6 +139,9 @@ public class NoteCollabWebSocketHandler extends BinaryWebSocketHandler implement
             // Nguoi dang o trong phong (ke ca o instance khac) bao lai con tro/ten
             // de nguoi moi thay ngay - cau tra loi di qua handleAwareness() nhu thuong.
             roomBroadcaster.broadcast(request.noteId(), YjsProtocol.encodeQueryAwareness(), session.getId());
+            // Noi dung ngoai dang cho hop nhat (Drive/REST luc khong ai mo note): gui SAU
+            // toan bo log + step1, de client hop nhat tren tai lieu da nap day du.
+            pendingMergeDispatcher.onSessionJoined(request.noteId());
 
             log.debug("Ket noi {} vao phong note {} (doi {}), {} dong log",
                     rawSession.getId(), request.noteId(), request.generation(), updates.size());
@@ -151,6 +157,7 @@ public class NoteCollabWebSocketHandler extends BinaryWebSocketHandler implement
             return;
         }
         roomRegistry.leave(state.getNoteId(), state.getSession());
+        pendingMergeDispatcher.onSessionLeft(state.getNoteId(), state.getSession().getId());
 
         // Bao cho nguoi con lai: con tro/ten cua ket noi nay da roi phong. Khong co
         // buoc nay, con tro "ma" con hien den khi awareness tu het han (30s).
@@ -190,6 +197,7 @@ public class NoteCollabWebSocketHandler extends BinaryWebSocketHandler implement
             case YjsProtocol.MESSAGE_SYNC -> handleSync(state, message, data);
             case YjsProtocol.MESSAGE_AWARENESS -> handleAwareness(state, message, data);
             case YjsProtocol.MESSAGE_TEXT_SNAPSHOT -> handleTextSnapshot(state, message.text());
+            case YjsProtocol.MESSAGE_MERGE_APPLIED -> pendingMergeDispatcher.onMergeApplied(state.getNoteId(), message.number());
             case YjsProtocol.MESSAGE_QUERY_AWARENESS, YjsProtocol.MESSAGE_AUTH -> {
                 // Chi server gui query awareness (khi co nguoi moi vao); xac thuc lam o buoc ket noi
             }

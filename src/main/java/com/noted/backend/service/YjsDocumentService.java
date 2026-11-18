@@ -1,9 +1,11 @@
 package com.noted.backend.service;
 
 import com.noted.backend.domain.entity.Note;
+import com.noted.backend.domain.entity.NotePendingMerge;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Luu tru tai lieu Yjs cua note duoi dang log cac update nhi phan.
@@ -47,9 +49,22 @@ public interface YjsDocumentService {
     void compactDocument(Long noteId, int generation, Collection<Long> replacedIds, byte[] fullState);
 
     /**
-     * Noi dung note vua bi ghi de tu ngoai luong cong tac: tang doi tai lieu,
-     * xoa log cu va phat NoteContentReplacedEvent (dong phong sau commit).
-     * Nguoi goi chiu trach nhiem save() note sau do, trong CUNG transaction.
+     * Noi dung moi den tu NGOAI luong soan thao cong tac (Google Drive, REST
+     * PATCH /content, ghi de khi trung ten). KHONG ghi de tai lieu Yjs, KHONG tach
+     * ban sao: luu (ban goc, ban moi) cho 1 trinh duyet hop nhat 3 chieu vao
+     * Y.Text dang soan - chi 1 file duy nhat, doan bi sua o ca 2 noi duoc giu ca
+     * 2 ban co dau danh dau. Da co lan cho -> giu ban goc CU NHAT, ban moi MOI NHAT.
+     *
+     * Bo qua khi khong co gi de hop nhat: ban goc = ban moi, hoac note chua tung
+     * mo o che do cong tac (chua co log) va file da la ban moi (ban khoi tao se
+     * lay thang tu file).
+     *
+     * @param baseContent noi dung tai lieu TRUOC khi bi thay (null = rong)
      */
-    void resetDocument(Note note);
+    void submitExternalContent(Note note, String baseContent, String incomingContent, NotePendingMerge.Source source);
+
+    Optional<NotePendingMerge> findPendingMerge(Long noteId);
+
+    /** Trinh duyet da hop nhat xong lan {@code mergeId} - xoa neu chua co lan moi hon. */
+    void acknowledgeMerge(Long noteId, long mergeId);
 }

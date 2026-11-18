@@ -119,12 +119,13 @@ public class Note {
     private int version = 1;
 
     /**
-     * "Doi" (the he) cua tai lieu Yjs gan voi note nay. Tang 1 moi khi noi dung
-     * bi ghi de TU NGOAI luong soan thao cong tac (REST PATCH /content, tao/doi
-     * ten trung ten -> ghi de, keo ve tu Google Drive) - xem
-     * YjsDocumentService.resetDocument(). Doi moi = log Yjs cu bi xoa, tai lieu
-     * duoc khoi tao lai tu file; client dang cam doi cu bi dong ket noi (4409)
-     * va phai mo lai dung doi moi. Ghi snapshot tu chinh luong Yjs KHONG tang.
+     * "Doi" (the he) cua tai lieu Yjs gan voi note nay. Client mo phong theo doi
+     * nay; lech doi -> ket noi bi dong (4409) va client tai lai note.
+     *
+     * Hien KHONG con duong nao tang doi: noi dung tu ngoai (Drive, REST, ghi de
+     * khi trung ten) duoc HOP NHAT vao tai lieu dang co (xem
+     * YjsDocumentService.submitExternalContent) thay vi khoi tao lai tai lieu.
+     * Giu cot nay cho truong hop sau nay can bo han 1 tai lieu hong.
      */
     @Column(name = "yjs_generation", nullable = false)
     @Builder.Default

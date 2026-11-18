@@ -14,8 +14,11 @@ import java.util.List;
  *  100 TEXT_SNAPSHOT  (client -> server) varString(toan bo text hien tai) - de ghi file .txt
  *                       va day len Google Drive; KHONG tham gia dong bo CRDT
  *  101 SNAPSHOT_ACK   (server -> client) varUint(trang thai) + varUint(version note)
+ *  102 PENDING_MERGE  (server -> 1 client) varUint(mergeId) varString(ban goc) varString(ban moi)
+ *                       varString(nhan nguon) - noi dung ngoai can hop nhat 3 chieu vao Y.Text
+ *  103 MERGE_APPLIED  (client -> server) varUint(mergeId) - da hop nhat xong
  * </pre>
- * Loai 0-3 la cua y-websocket chuan; 100/101 la mo rong rieng cua Noted (y-websocket
+ * Loai 0-3 la cua y-websocket chuan; 100-103 la mo rong rieng cua Noted (y-websocket
  * cho phep dang ky them handler qua provider.messageHandlers).
  *
  * Backend chi doc "phong bi" (loai, buoc) - khong giai ma noi dung CRDT ben trong.
@@ -28,6 +31,8 @@ public final class YjsProtocol {
     public static final int MESSAGE_QUERY_AWARENESS = 3;
     public static final int MESSAGE_TEXT_SNAPSHOT = 100;
     public static final int MESSAGE_SNAPSHOT_ACK = 101;
+    public static final int MESSAGE_PENDING_MERGE = 102;
+    public static final int MESSAGE_MERGE_APPLIED = 103;
 
     public static final int SYNC_STEP1 = 0;
     public static final int SYNC_STEP2 = 1;
@@ -46,7 +51,7 @@ public final class YjsProtocol {
     }
 
     /** Message da tach phong bi. Chi 1 trong cac truong du lieu co gia tri tuy loai. */
-    public record IncomingMessage(int messageType, int syncStep, byte[] payload, String text) {}
+    public record IncomingMessage(int messageType, int syncStep, byte[] payload, String text, long number) {}
 
     /** 1 muc trong awareness update: client nao, dong ho bao nhieu, trang thai co bi xoa (null) khong. */
     public record AwarenessEntry(long clientId, long clock, boolean removed) {}
@@ -60,11 +65,12 @@ public final class YjsProtocol {
                 if (step != SYNC_STEP1 && step != SYNC_STEP2 && step != SYNC_UPDATE) {
                     throw new YjsProtocolException("Buoc sync khong hop le: " + step);
                 }
-                yield new IncomingMessage(type, step, decoder.readVarUint8Array(), null);
+                yield new IncomingMessage(type, step, decoder.readVarUint8Array(), null, 0);
             }
-            case MESSAGE_AWARENESS -> new IncomingMessage(type, -1, decoder.readVarUint8Array(), null);
-            case MESSAGE_TEXT_SNAPSHOT -> new IncomingMessage(type, -1, null, decoder.readVarString());
-            default -> new IncomingMessage(type, -1, null, null);
+            case MESSAGE_AWARENESS -> new IncomingMessage(type, -1, decoder.readVarUint8Array(), null, 0);
+            case MESSAGE_TEXT_SNAPSHOT -> new IncomingMessage(type, -1, null, decoder.readVarString(), 0);
+            case MESSAGE_MERGE_APPLIED -> new IncomingMessage(type, -1, null, null, decoder.readVarUint());
+            default -> new IncomingMessage(type, -1, null, null, 0);
         };
     }
 
@@ -96,6 +102,13 @@ public final class YjsProtocol {
      */
     public static byte[] encodeQueryAwareness() {
         return new Lib0Encoder(1).writeVarUint(MESSAGE_QUERY_AWARENESS).toByteArray();
+    }
+
+    public static byte[] encodePendingMerge(long mergeId, String baseContent, String incomingContent, String sourceLabel) {
+        return new Lib0Encoder(baseContent.length() + incomingContent.length() + 64)
+                .writeVarUint(MESSAGE_PENDING_MERGE).writeVarUint(mergeId)
+                .writeVarString(baseContent).writeVarString(incomingContent).writeVarString(sourceLabel)
+                .toByteArray();
     }
 
     public static byte[] encodeSnapshotAck(int status, long noteVersion) {

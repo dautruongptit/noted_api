@@ -14,10 +14,6 @@ public interface NoteYjsUpdateRepository extends JpaRepository<NoteYjsUpdate, Lo
     List<NoteYjsUpdate> findByNoteIdAndGenerationOrderByIdAsc(Long noteId, int generation);
 
     @Modifying
-    @Query("delete from NoteYjsUpdate u where u.noteId = :noteId")
-    int deleteAllOfNote(@Param("noteId") Long noteId);
-
-    @Modifying
     @Query("delete from NoteYjsUpdate u where u.noteId = :noteId and u.generation <> :generation")
     int deleteStaleGenerations(@Param("noteId") Long noteId, @Param("generation") int generation);
 

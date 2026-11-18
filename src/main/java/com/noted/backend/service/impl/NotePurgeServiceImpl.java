@@ -55,6 +55,8 @@ public class NotePurgeServiceImpl implements NotePurgeService {
             // xoa DB record cua CHINH note do lan cac note con lai trong batch.
             try {
                 fileStorageService.delete(note.getFilePath());
+                // Ban da dong bo voi Drive gan nhat (DriveSyncServiceImpl.syncedBasePath)
+                fileStorageService.delete(note.getFilePath() + ".synced");
             } catch (Exception e) {
                 log.warn("Xoa file vat ly that bai luc purge cho note id={} (path={}), van tiep tuc xoa DB record",
                         note.getId(), note.getFilePath(), e);

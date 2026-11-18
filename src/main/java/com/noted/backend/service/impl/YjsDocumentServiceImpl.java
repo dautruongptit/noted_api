@@ -1,10 +1,12 @@
 package com.noted.backend.service.impl;
 
 import com.noted.backend.domain.entity.Note;
+import com.noted.backend.domain.entity.NotePendingMerge;
 import com.noted.backend.domain.entity.NoteYjsUpdate;
-import com.noted.backend.event.NoteContentReplacedEvent;
+import com.noted.backend.event.NotePendingMergeEvent;
 import com.noted.backend.exception.CollabGenerationMismatchException;
 import com.noted.backend.exception.NoteNotFoundException;
+import com.noted.backend.repository.NotePendingMergeRepository;
 import com.noted.backend.repository.NoteRepository;
 import com.noted.backend.repository.NoteYjsUpdateRepository;
 import com.noted.backend.service.FileStorageService;
@@ -18,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +30,7 @@ public class YjsDocumentServiceImpl implements YjsDocumentService {
 
     private final NoteRepository noteRepository;
     private final NoteYjsUpdateRepository updateRepository;
+    private final NotePendingMergeRepository pendingMergeRepository;
     private final FileStorageService fileStorageService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -90,12 +95,48 @@ public class YjsDocumentServiceImpl implements YjsDocumentService {
 
     @Override
     @Transactional
-    public void resetDocument(Note note) {
-        note.setYjsGeneration(note.getYjsGeneration() + 1);
-        if (note.getId() != null) {
-            updateRepository.deleteAllOfNote(note.getId());
-            eventPublisher.publishEvent(new NoteContentReplacedEvent(note.getId()));
+    public void submitExternalContent(Note note, String baseContent, String incomingContent,
+                                      NotePendingMerge.Source source) {
+        if (note.getId() == null) {
+            return; // note vua tao, chua co tai lieu nao de hop nhat
         }
+        String base = baseContent == null ? "" : baseContent;
+        String incoming = incomingContent == null ? "" : incomingContent;
+        if (base.equals(incoming)) {
+            return;
+        }
+        boolean hasDocument = !updateRepository
+                .findByNoteIdAndGenerationOrderByIdAsc(note.getId(), note.getYjsGeneration()).isEmpty();
+        if (!hasDocument && Objects.equals(fileStorageService.read(note.getFilePath()), incoming)) {
+            return; // lan mo dau se khoi tao tai lieu tu chinh file nay
+        }
+
+        Optional<NotePendingMerge> existing = pendingMergeRepository.findByNoteId(note.getId());
+        // Nhieu thay doi ngoai lien tiep truoc khi trinh duyet kip hop nhat: GIU ban
+        // goc cu nhat (diem tai lieu Yjs con dong bo), lay ban moi nhat. diff3 tu
+        // loai phan ban moi va tai lieu cung chua giong nhau.
+        String mergeBase = existing.map(NotePendingMerge::getBaseContent).orElse(base);
+        pendingMergeRepository.deleteByNoteIdNow(note.getId());
+        pendingMergeRepository.save(NotePendingMerge.builder()
+                .noteId(note.getId())
+                .baseContent(mergeBase)
+                .incomingContent(incoming)
+                .source(source)
+                .build());
+        eventPublisher.publishEvent(new NotePendingMergeEvent(note.getId()));
+        log.debug("Note {}: cho hop nhat noi dung tu {}", note.getId(), source);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<NotePendingMerge> findPendingMerge(Long noteId) {
+        return pendingMergeRepository.findByNoteId(noteId);
+    }
+
+    @Override
+    @Transactional
+    public void acknowledgeMerge(Long noteId, long mergeId) {
+        pendingMergeRepository.deleteByNoteIdAndId(noteId, mergeId);
     }
 
     private static void ensureGeneration(Note note, int generation) {

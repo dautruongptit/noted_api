@@ -227,11 +227,14 @@ bỏ qua pull khi note đang `dirty` (an toàn nhưng "mù" — không biết Dr
 không). Giờ dùng cột `drive_synced_content_hash` (baseline MD5 tại lần sync thành công gần nhất,
 `V6__add_drive_synced_content_hash.sql`) để so 3 chiều: nếu MD5 hiện tại của Drive vẫn khớp baseline,
 không có gì mới để mất — cứ để push bình thường ở lần debounce kế tiếp; nếu Drive đã khác baseline
-(nghĩa là Drive đổi độc lập trong lúc local cũng đang dirty) → **conflict thật** → giữ local (đang
-active) làm bản chính tiếp tục push, tách bản Drive thành 1 note riêng qua `NoteService.createConflictCopy()`
-(tên có hậu tố `"(xung đột dd/MM HH:mm)"`, cờ `is_conflict_copy=TRUE`). Đây là **nơi duy nhất** còn
-tạo bản xung đột: sửa trực tiếp trên Drive là việc người dùng không tự biết nếu không được báo,
-khác với trường hợp nhiều trình duyệt của chính họ (mục 8).
+(nghĩa là Drive đổi độc lập trong lúc local cũng đang dirty) → **conflict thật** → **hợp nhất 3 chiều
+vào chính note đó** (mục 12, "Hợp nhất nội dung từ ngoài"). Bản gốc là `{filePath}.synced`, tức nội dung
+đồng bộ với Drive gần nhất (ghi ở `markSynced` và khi pull). Bản mới là bản trên Drive. Sau đó baseline
+được cập nhật luôn, để lần pull sau không báo lại đúng conflict này.
+
+Trước đây trường hợp này tách bản Drive thành note `"(xung đột dd/MM HH:mm)"`. Baseline lại không được
+cập nhật, nên mỗi lần pull lại đẻ thêm một bản sao. `createConflictCopy()` vẫn còn trong `NoteService`
+nhưng **không còn đường nào gọi tới**. Từ nay mỗi note chỉ có 1 file duy nhất.
 
 ## 7b. Chọn nhiều để xoá — CÓ; Chọn nhiều để sync — KHÔNG (quyết định nghiệp vụ)
 
@@ -261,7 +264,7 @@ cả ("phương án 2" đã chọn: ưu tiên phiên đang gõ, tránh UX phức
 account autosave trùng lúc). OCC **chỉ thực sự có hiệu lực** ở `/api/sync/batch` — đúng nơi cần bảo vệ
 nhất (client offline quay lại, reconcile 1 lần).
 
-**Chiến lược conflict — GHI ĐÈ, chỉ giữ 1 file gốc (đổi từ 2026-09-15):** nếu `baseVersion` client
+**Chiến lược conflict — chỉ giữ 1 file gốc (đổi từ 2026-09-15):** nếu `baseVersion` client
 cầm khác `version` hiện tại của server, server vẫn **ghi đè** bằng bản trong hàng đợi và trả status
 `synced_overwritten` (thay vì `synced`) để client biết mà kéo lại nội dung. Các status có thể trả về:
 `created` (kèm `serverId`), `synced`, `synced_overwritten`, `not_found_on_server`, `error` (kèm `message`).
@@ -270,9 +273,10 @@ Trước đây trường hợp này tách bản local thành note `"(xung đột
 Đã bỏ vì người dùng mở cùng 1 note ở 3-4 trình duyệt bị đẻ ra nhiều file xung đột, trong khi đường
 lưu bình thường (`updateContent`) vốn đã là "ai lưu sau thắng".
 
-⚠️ Việc ghi đè này **chỉ an toàn nhờ** cơ chế làm mới ở frontend (`App.tsx`): quay lại tab thì so
-`contentVersion` với server, kéo bản mới về (hoặc hỏi nếu đang có chữ chưa lưu) trước khi người dùng
-gõ tiếp. Bỏ cơ chế đó thì phải xem lại chỗ này.
+Với note đang soạn cộng tác (có log Yjs), `updateContent` không ghi đè tài liệu Yjs. Nó đưa nội dung
+vào hàng chờ hợp nhất 3 chiều (mục 12), nên chữ trong hàng đợi offline được **gộp** vào note chứ không
+ghi đè. Với note không dùng Yjs, ghi đè chỉ an toàn nhờ cơ chế làm mới ở frontend (`App.tsx`: quay lại
+tab thì so `contentVersion`).
 
 ## 9. Danh sách API Endpoints (đầy đủ, đối chiếu trực tiếp với controller)
 
@@ -475,17 +479,35 @@ Log rỗng (note cũ có từ trước khi có tính năng này, hoặc vừa đ
 backend tự tạo (`YjsProtocol.encodeTextSeedUpdate`). `clientId` tất định theo (note, đời), nên 2 kết
 nối khởi tạo cùng lúc sinh ra 2 update giống hệt nhau và Yjs tự loại trùng.
 
-### "Đời" tài liệu (`notes.yjs_generation`)
+### Hợp nhất nội dung từ ngoài — luôn 1 file, không bản sao
 
-Khi nội dung bị ghi đè **từ ngoài** luồng cộng tác, `YjsDocumentService.resetDocument()` tăng đời,
-xóa log và phát `NoteContentReplacedEvent`. Sau commit, phòng bị đóng với mã `4409`, client tải lại
-note rồi mở phòng theo đời mới. Những đường ghi đè từ ngoài gồm:
-- `PATCH /api/notes/{id}/content` (REST cũ);
+Nội dung đến từ **ngoài** luồng cộng tác **không** ghi đè tài liệu Yjs và **không** tạo bản sao. Các
+nguồn đó gồm:
+- `PATCH /api/notes/{id}/content` và hàng đợi offline `/api/sync/batch`;
 - tạo note hoặc đổi tên trùng tên (ghi đè);
-- kéo nội dung mới từ Google Drive (`pullOneFile`).
+- kéo nội dung mới từ Google Drive (`pullOneFile`);
+- Drive và máy này cùng sửa (mặt trận B, mục 7).
 
-Snapshot từ chính luồng Yjs **không** tăng đời. Nếu đời cũ còn phần gõ chưa được server xác nhận,
-frontend giữ lại thành note riêng `"... (bản chưa lưu dd/MM HH:mm)"`.
+Thay vào đó, `YjsDocumentService.submitExternalContent()` lưu một dòng vào `note_pending_merges`
+(V13), gồm **bản gốc** (nội dung trước khi bị thay) và **bản mới**. Có nhiều thay đổi liên tiếp thì
+giữ bản gốc cũ nhất và bản mới mới nhất.
+
+1. Sau commit, `PendingMergeDispatcher` gửi message `102` cho **đúng 1** trình duyệt đang mở note.
+   Nếu không ai mở thì gửi cho người mở đầu tiên, ngay sau log và step1. Chỉ gửi cho 1 người vì nếu
+   2 trình duyệt cùng áp một lần hợp nhất, Yjs sẽ giữ cả hai lần chèn và đoạn chữ bị nhân đôi.
+2. Trình duyệt hợp nhất 3 chiều vào `Y.Text` hiện tại (`web/src/collab/externalMerge.ts`):
+   - diff3 theo dòng, sau đó hợp nhất lại theo ký tự cho các vùng mà theo dòng bị coi là xung đột
+     (hai bên sửa hai dòng liền kề vẫn gộp được);
+   - chỉ đoạn bị sửa **chồng lên cùng chỗ** mới giữ cả 2 bản, kẹp giữa
+     `<<<<<<< Đang soạn` / `=======` / `>>>>>>> Google Drive`.
+
+   Thay đổi đi qua Yjs tới mọi thiết bị. `mergeId` được ghi vào `Y.Map("noted-meta")` trong cùng
+   transaction, nên nếu server gửi lại cùng một lần hợp nhất thì không áp lần 2.
+3. Trình duyệt gửi `103` (đã xong) thì dòng chờ bị xóa. Nếu người được giao rời phòng trước khi xong,
+   lần hợp nhất được giao cho người còn lại.
+
+`notes.yjs_generation` vẫn còn: client lệch đời sẽ bị đóng kết nối `4409` và tải lại note. Nhưng hiện
+**không còn đường nào tăng đời** (đã bỏ `resetDocument`), nên đời giữ nguyên.
 
 Mã đóng kết nối (`CollabCloseStatus`): `4400` URL sai, `4401` token hết hạn (frontend refresh rồi
 kết nối lại), `4404` không có note, `4409` đời tài liệu đổi, `4410` note bị xóa. Lỗi lưu trữ →
@@ -501,9 +523,10 @@ kết nối lại sẽ bù đủ. Mặc định `false` (1 instance, `LocalRoomB
 
 ### Giới hạn đã biết
 
-- Drive → app vẫn là **ghi đè cả tài liệu** (đổi đời), chưa hợp nhất từng phần. Thiết bị đang offline
-  ở đời cũ mất khả năng merge, phần chưa lưu được giữ thành note riêng như trên. Phần này sẽ được
-  thay ở Module 3 (Drive push notification → Yjs update qua WebSocket).
+- Hợp nhất nội dung từ ngoài chỉ chọn người hợp nhất trong số kết nối của **1 instance**. Khi chạy
+  nhiều instance (bật Redis) cần khóa phân tán để chọn 1 người trên toàn hệ thống.
+- Drive → app vẫn đi qua **polling** (Debounce Sync / "Đồng bộ ngay"), chưa có Drive Push Notification
+  (Module 3).
 - Mỗi update gõ phím là 1 lần `INSERT`. Log được nén mỗi khi có thiết bị kết nối, nhưng một phiên
   gõ rất dài trên 1 thiết bị sẽ tích nhiều dòng cho tới lần kết nối kế tiếp.
 - Khóa `syncingNoteIds`/`pullingUserIds` của Drive sync vẫn là khóa trong bộ nhớ (1 instance).

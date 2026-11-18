@@ -1,6 +1,7 @@
 package com.noted.backend.websocket;
 
 import com.noted.backend.domain.entity.Note;
+import com.noted.backend.domain.entity.NotePendingMerge;
 import com.noted.backend.exception.CollabGenerationMismatchException;
 import com.noted.backend.security.JwtTokenProvider;
 import com.noted.backend.service.NoteService;
@@ -27,6 +28,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,7 +58,8 @@ class NoteCollabWebSocketHandlerTest {
     void setUp() {
         registry = new NoteRoomRegistry();
         handler = new NoteCollabWebSocketHandler(jwtTokenProvider, yjsDocumentService, noteService,
-                registry, new LocalRoomBroadcaster(registry), 1024 * 1024, 1024, 10_000, 1024 * 1024);
+                registry, new LocalRoomBroadcaster(registry), new PendingMergeDispatcher(yjsDocumentService, registry),
+                1024 * 1024, 1024, 10_000, 1024 * 1024);
         lenient().when(jwtTokenProvider.validateToken("good")).thenReturn(true);
         lenient().when(jwtTokenProvider.getUserIdFromToken("good")).thenReturn(USER_ID);
         lenient().when(yjsDocumentService.authorize(USER_ID, NOTE_ID, 0)).thenReturn(new Note());
@@ -115,6 +118,59 @@ class NoteCollabWebSocketHandlerTest {
         // Server khong giu awareness: phai hoi nguoi dang o day, ho tra loi cho ca phong
         assertThat(a.sent).containsExactly(YjsProtocol.encodeQueryAwareness());
         assertThat(b.sent).doesNotContain(YjsProtocol.encodeQueryAwareness());
+    }
+
+    private static NotePendingMerge pendingMerge(long id) {
+        return NotePendingMerge.builder().id(id).noteId(NOTE_ID)
+                .baseContent("a\n").incomingContent("a\nb\n").source(NotePendingMerge.Source.DRIVE).build();
+    }
+
+    private static long countPendingMergeMessages(FakeSession session) {
+        return session.sent.stream().filter(m -> m[0] == (byte) YjsProtocol.MESSAGE_PENDING_MERGE).count();
+    }
+
+    @Test
+    void pendingMergeIsSentToExactlyOneSessionAfterTheLog() throws Exception {
+        when(yjsDocumentService.findPendingMerge(NOTE_ID)).thenReturn(Optional.of(pendingMerge(5)));
+
+        FakeSession a = connect("a", "good");
+        // Gui SAU log + step1 rong (client hop nhat tren tai lieu da nap day du)
+        assertThat(a.sent).containsExactly(
+                YjsProtocol.encodeSyncStep2(SEED),
+                YjsProtocol.encodeSyncUpdate(new byte[]{9, 9}),
+                YjsProtocol.encodeEmptySyncStep1(),
+                YjsProtocol.encodePendingMerge(5, "a\n", "a\nb\n", "Google Drive"));
+
+        FakeSession b = connect("b", "good");
+
+        // Chi 1 nguoi hop nhat - 2 nguoi cung ap se chen doan text 2 lan
+        assertThat(countPendingMergeMessages(a)).isEqualTo(1);
+        assertThat(countPendingMergeMessages(b)).isZero();
+    }
+
+    @Test
+    void pendingMergeIsReassignedWhenAssigneeLeavesWithoutAcknowledging() throws Exception {
+        when(yjsDocumentService.findPendingMerge(NOTE_ID)).thenReturn(Optional.of(pendingMerge(5)));
+        FakeSession a = connect("a", "good");
+        FakeSession b = connect("b", "good");
+
+        handler.afterConnectionClosed(a, CloseStatus.GOING_AWAY);
+
+        assertThat(countPendingMergeMessages(b)).isEqualTo(1);
+    }
+
+    @Test
+    void mergeAppliedAcknowledgesAndHandsOutNewerMergeIfAny() throws Exception {
+        when(yjsDocumentService.findPendingMerge(NOTE_ID))
+                .thenReturn(Optional.of(pendingMerge(5)))
+                .thenReturn(Optional.empty());
+        FakeSession a = connect("a", "good");
+        a.sent.clear();
+
+        send(a, new Lib0Encoder().writeVarUint(YjsProtocol.MESSAGE_MERGE_APPLIED).writeVarUint(5).toByteArray());
+
+        verify(yjsDocumentService).acknowledgeMerge(NOTE_ID, 5L);
+        assertThat(countPendingMergeMessages(a)).isZero();
     }
 
     @Test
