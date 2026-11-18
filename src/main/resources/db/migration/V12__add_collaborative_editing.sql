@@ -1,5 +1,9 @@
 -- ============================================================
--- V10__add_collaborative_editing.sql
+-- V12__add_collaborative_editing.sql
+--
+-- Ban dau dat ten V10, nhung DB note_text DA co V10 (add_drive_account_email)
+-- va V11 (create_login_histories) tu 1 ban code khac -> Flyway coi V10 "da chay"
+-- va bo qua file nay, app chet vi thieu bang note_yjs_updates. Doi so thanh V12.
 --
 -- Soan thao cong tac thoi gian thuc (Yjs CRDT qua WebSocket).
 --

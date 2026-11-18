@@ -13,7 +13,7 @@ Backend cho ứng dụng ghi chú **Noted**, xây dựng theo Clean Architecture
 > (port, biến môi trường `VITE_API_BASE_URL`/`ALLOWED_ORIGINS` phải khớp nhau giữa 2 phía).
 >
 > Stack: Java 17, Spring Boot 3.3.2, Spring Security OAuth2 Client, Spring Data JPA, MySQL 8,
-> Flyway (migration `V1`..`V9` trong `src/main/resources/db/migration`).
+> Flyway (migration `V1`..`V12` trong `src/main/resources/db/migration`).
 
 ## 1. Kiến trúc phân lớp (Clean Architecture)
 
@@ -345,8 +345,12 @@ log security DEBUG); `prod` nạp `application-prod.yml` (log gọn).
 `src/main/resources/db/migration/V<số>__<mô tả>.sql` chưa có trong bảng `flyway_schema_history`
 theo thứ tự số phiên bản. Việc này chạy **trước** khi Hibernate kiểm tra schema
 (`ddl-auto: validate`). Nếu một migration lỗi, app dừng khởi động thay vì chạy với schema dở dang.
-- Muốn đổi schema thì thêm file `V` mới, số lớn hơn số lớn nhất đang có. **Không sửa** file đã
-  chạy.
+- Muốn đổi schema thì thêm file `V` mới, số lớn hơn số lớn nhất **trong bảng `flyway_schema_history` của DB**
+  (không chỉ trong repo). **Không sửa** file đã chạy.
+- ⚠️ DB production `note_text` có `V10__add_drive_account_email.sql`, file này **không có trong repo**
+  (do một bản code khác chạy). Vì thế migration soạn thảo cộng tác ban đầu đánh số V10 đã bị Flyway coi là
+  "đã chạy" và bỏ qua; `validate-on-migrate: false` che mất lỗi. Đã đổi thành V12. Nên tìm lại file V10
+  đó đưa vào repo.
 - File sai mẫu tên trước đây bị Flyway bỏ qua âm thầm. Giờ bật `validate-migration-naming` để app
   báo lỗi ngay. `MigrationNamingTest` còn chặn từ lúc chạy test, kể cả trường hợp trùng số phiên bản.
 - Migration được đóng vào file jar, nên khi có file mới phải **build lại image**:
@@ -399,7 +403,7 @@ Soạn thảo cộng tác (mục 12) — có test:
 - ✅ Handler relay: xác thực, gửi log, nén log, relay, awareness, snapshot, ghép mảnh, lỗi →
   `NoteCollabWebSocketHandlerTest`.
 - ⚠️ **Chưa chạy đầu-cuối với MySQL + Spring Boot thật** (máy phát triển không có Docker/MySQL
-  riêng, migration V10 chưa áp lên DB nào). Thuật toán relay đã được kiểm bằng mô phỏng Node với
+  riêng). Migration `V12__add_collaborative_editing.sql` tạo bảng `note_yjs_updates`). Thuật toán relay đã được kiểm bằng mô phỏng Node với
   client `y-websocket` thật (10 kịch bản: hội tụ sau offline, undo chọn lọc, nén log, seed trùng,
   giữ kết nối khi ngồi 1 mình). Cần thử trên môi trường staging trước khi lên production.
 - ⚠️ Redis Pub/Sub (`RedisRoomBroadcaster`) mới chỉ compile, chưa chạy với `infra-redis` thật.
