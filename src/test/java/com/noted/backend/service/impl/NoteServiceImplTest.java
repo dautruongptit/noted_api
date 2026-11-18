@@ -12,6 +12,7 @@ import com.noted.backend.event.NoteDeletedEvent;
 import com.noted.backend.exception.NoteNotFoundException;
 import com.noted.backend.repository.NoteRepository;
 import com.noted.backend.service.FileStorageService;
+import com.noted.backend.service.YjsDocumentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,7 @@ class NoteServiceImplTest {
     @Mock private NoteRepository noteRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private YjsDocumentService yjsDocumentService;
 
     @InjectMocks
     private NoteServiceImpl noteService;

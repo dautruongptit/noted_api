@@ -11,8 +11,8 @@ public interface DriveSyncService {
     /**
      * "Debounce Sync" - job dinh ky (quet thuong xuyen, VD moi 5s) tim cac
      * note dang dirty=true VA da "yen tinh" (khong sua gi them) qua 1
-     * khoang thoi gian (mac dinh 30s, xem app.drive.sync-debounce-idle-ms) -
-     * day chinh la kenh "sau 30 giay khong co thay doi" trong 3 kenh kich
+     * khoang thoi gian (app.drive.sync-debounce-idle-ms, hien la 5s) -
+     * day chinh la kenh "sau N giay khong co thay doi" trong 3 kenh kich
      * hoat sync da thong nhat.
      */
     void runDebouncedSyncBatch();

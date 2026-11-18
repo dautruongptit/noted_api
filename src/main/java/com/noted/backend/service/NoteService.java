@@ -19,6 +19,20 @@ public interface NoteService {
 
     NoteDetailResponse updateContent(Long userId, Long noteId, UpdateContentRequest request);
 
+    /**
+     * Ghi "anh chup" text hien tai cua tai lieu Yjs xuong file .txt (de tai
+     * xuong, tim kiem va day len Google Drive). Goi tu WebSocket (message
+     * TEXT_SNAPSHOT), KHONG phai dong bo go phim - nguon su that cua noi dung
+     * dang soan la log Yjs.
+     *
+     * Khac updateContent(): KHONG doi doi tai lieu Yjs (chinh luong Yjs tao ra
+     * noi dung nay). Text trung voi file dang co thi khong ghi gi.
+     *
+     * @return version hien tai cua note sau khi ghi
+     * @throws com.noted.backend.exception.CollabGenerationMismatchException client giu doi tai lieu cu
+     */
+    int saveCollabSnapshot(Long userId, Long noteId, int yjsGeneration, String content);
+
     NoteSummaryResponse rename(Long userId, Long noteId, RenameNoteRequest request);
 
     NoteDetailResponse duplicate(Long userId, Long noteId);

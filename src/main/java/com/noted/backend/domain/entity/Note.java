@@ -118,6 +118,18 @@ public class Note {
     @Builder.Default
     private int version = 1;
 
+    /**
+     * "Doi" (the he) cua tai lieu Yjs gan voi note nay. Tang 1 moi khi noi dung
+     * bi ghi de TU NGOAI luong soan thao cong tac (REST PATCH /content, tao/doi
+     * ten trung ten -> ghi de, keo ve tu Google Drive) - xem
+     * YjsDocumentService.resetDocument(). Doi moi = log Yjs cu bi xoa, tai lieu
+     * duoc khoi tao lai tu file; client dang cam doi cu bi dong ket noi (4409)
+     * va phai mo lai dung doi moi. Ghi snapshot tu chinh luong Yjs KHONG tang.
+     */
+    @Column(name = "yjs_generation", nullable = false)
+    @Builder.Default
+    private int yjsGeneration = 0;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 

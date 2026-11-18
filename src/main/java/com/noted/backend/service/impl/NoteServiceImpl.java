@@ -9,10 +9,12 @@ import com.noted.backend.dto.response.BulkDeleteResponse;
 import com.noted.backend.dto.response.NoteDetailResponse;
 import com.noted.backend.dto.response.NoteSummaryResponse;
 import com.noted.backend.event.NoteDeletedEvent;
+import com.noted.backend.exception.CollabGenerationMismatchException;
 import com.noted.backend.exception.NoteNotFoundException;
 import com.noted.backend.repository.NoteRepository;
 import com.noted.backend.service.FileStorageService;
 import com.noted.backend.service.NoteService;
+import com.noted.backend.service.YjsDocumentService;
 import com.noted.backend.util.HashUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,6 +46,10 @@ public class NoteServiceImpl implements NoteService {
     private final NoteRepository noteRepository;
     private final FileStorageService fileStorageService;
     private final ApplicationEventPublisher eventPublisher;
+    // Moi lan GHI DE noi dung tu ngoai luong soan thao cong tac (REST, ghi de
+    // khi trung ten) phai dat lai tai lieu Yjs, neu khong lan snapshot ke tiep
+    // tu trinh duyet se ghi de nguoc noi dung moi bang ban Yjs cu.
+    private final YjsDocumentService yjsDocumentService;
 
     @Override
     @Transactional(readOnly = true)
@@ -80,6 +86,7 @@ public class NoteServiceImpl implements NoteService {
         if (existing.isPresent()) {
             Note note = existing.get();
             writeContentAndUpdateMetadata(note, content);
+            yjsDocumentService.resetDocument(note);
             note.setSyncState(SyncState.PENDING_DRIVE);
             note.setDirty(true);
             note.setDriveSyncAttempts(0);
@@ -108,6 +115,9 @@ public class NoteServiceImpl implements NoteService {
         Note note = findOwnedNote(userId, noteId);
 
         writeContentAndUpdateMetadata(note, request.content());
+        // Route REST cu (client chua co Yjs, hoac goi tay) ghi de ca noi dung ->
+        // tai lieu Yjs cu khong con khop, phai khoi tao lai tu file moi.
+        yjsDocumentService.resetDocument(note);
         note.setSyncState(SyncState.PENDING_DRIVE); // moi thay doi -> can day len Drive lai
         note.setDirty(true); // "Auto Save vao DB" xong -> danh dau dirty, cho Debounce Sync xu ly rieng
         note.setDriveSyncAttempts(0);
@@ -120,6 +130,27 @@ public class NoteServiceImpl implements NoteService {
         note = noteRepository.save(note);
 
         return NoteDetailResponse.of(note, request.content());
+    }
+
+    @Override
+    @Transactional
+    public int saveCollabSnapshot(Long userId, Long noteId, int yjsGeneration, String content) {
+        Note note = findOwnedNote(userId, noteId);
+        if (note.getYjsGeneration() != yjsGeneration) {
+            throw new CollabGenerationMismatchException(noteId, yjsGeneration, note.getYjsGeneration());
+        }
+        // Nhieu thiet bi cung gui snapshot cua CUNG 1 trang thai da hop nhat -
+        // chi ghi khi text thuc su khac, tranh danh dau dirty/day Drive thua.
+        if (HashUtil.sha256(content).equals(note.getContentHash())) {
+            return note.getVersion();
+        }
+
+        writeContentAndUpdateMetadata(note, content);
+        note.setSyncState(SyncState.PENDING_DRIVE);
+        note.setDirty(true); // Debounce Sync (DriveSyncServiceImpl) se day len Drive
+        note.setDriveSyncAttempts(0);
+        note.setVersion(note.getVersion() + 1);
+        return noteRepository.save(note).getVersion();
     }
 
     @Override
@@ -143,6 +174,7 @@ public class NoteServiceImpl implements NoteService {
             String sourceContent = fileStorageService.read(note.getFilePath());
 
             writeContentAndUpdateMetadata(target, sourceContent);
+            yjsDocumentService.resetDocument(target);
             target.setSyncState(SyncState.PENDING_DRIVE);
             target.setDirty(true);
             target.setDriveSyncAttempts(0);

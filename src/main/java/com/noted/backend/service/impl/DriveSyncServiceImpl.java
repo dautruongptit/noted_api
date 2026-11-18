@@ -11,6 +11,7 @@ import com.noted.backend.service.DriveSyncService;
 import com.noted.backend.service.FileStorageService;
 import com.noted.backend.service.GoogleDriveService;
 import com.noted.backend.service.NoteService;
+import com.noted.backend.service.YjsDocumentService;
 import com.noted.backend.util.HashUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,11 +44,11 @@ import java.util.stream.Collectors;
  *
  *  1) Debounce dinh ky (runDebouncedSyncBatch, @Scheduled quet moi vai giay):
  *     tim note dirty=true VA da "yen tinh" (khong sua gi them) qua nguong
- *     thoi gian (mac dinh 30s, app.drive.sync-debounce-idle-ms), dua tren
+ *     thoi gian (app.drive.sync-debounce-idle-ms, hien la 5s), dua tren
  *     cot "updated_at" co san - KHONG can them cau truc du lieu rieng de
  *     theo doi "lan sua gan nhat" (tan dung lai field da co).
  *  2) Flush thu cong (flushDirtyNotes): nguoi dung bam "Dong bo ngay" - day
- *     TOAN BO note dirty cua RIENG user do NGAY LAP TUC, khong doi 30s.
+ *     TOAN BO note dirty cua RIENG user do NGAY LAP TUC, khong doi nguong idle.
  *  3) Flush luc dong tab/roi trang: frontend goi CUNG endpoint voi (2) qua
  *     fetch(..., {keepalive:true}) trong su kien 'beforeunload'/'pagehide'.
  *
@@ -107,6 +108,8 @@ public class DriveSyncServiceImpl implements DriveSyncService {
     // Dung cho mat tran B (conflict Drive-vs-local-dirty, xem pullOneFile()) -
     // tach ban Drive thanh 1 note rieng qua co che "giu ca 2 ban" da co san.
     private final NoteService noteService;
+    // Keo noi dung moi tu Drive ve = ghi de tu ngoai luong cong tac (xem pullOneFile)
+    private final YjsDocumentService yjsDocumentService;
 
     // Xem giai thich chi tiet o javadoc class phia tren - BAT BUOC @Lazy vi
     // day la tham chieu VONG TRON (bean tu tiem chinh no) - khong co @Lazy,
@@ -694,6 +697,11 @@ public class DriveSyncServiceImpl implements DriveSyncService {
         long bytesWritten = fileStorageService.writeAtomic(note.getFilePath(), content);
         note.setContentSizeBytes(bytesWritten);
         note.setContentHash(HashUtil.sha256(content));
+        // Noi dung tu Drive thay the ban dang co -> tai lieu Yjs khoi tao lai tu
+        // file moi, cac trinh duyet dang mo note bi dong ket noi (4409) va tai lai.
+        // TODO(Module 3): thay bang chuyen text Drive thanh Yjs update gui qua
+        // WebSocket de hop nhat thay vi ghi de.
+        yjsDocumentService.resetDocument(note);
         note.setSyncState(SyncState.SYNCED);
         note.setDriveSyncedAt(LocalDateTime.now());
         note.setDriveSyncAttempts(0);

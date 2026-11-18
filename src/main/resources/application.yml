@@ -14,6 +14,19 @@ spring:
       maximum-pool-size: 10
       minimum-idle: 2
 
+  # Redis (container infra-redis tren shared-db-network) - CHI dung khi
+  # app.collab.redis.enabled=true, lam kenh Pub/Sub phat cheo message cua phong
+  # soan thao giua nhieu instance backend. Ket noi luoi (lazy): tat tinh nang thi
+  # khong bao gio ket noi toi Redis.
+  data:
+    redis:
+      host: ${REDIS_HOST:infra-redis}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:2}
+      password: ${REDIS_PASSWORD:}
+      repositories:
+        enabled: false   # chi dung Pub/Sub, khong co Redis repository nao
+
   jpa:
     hibernate:
       ddl-auto: validate      # schema quan ly boi Flyway, khong de Hibernate tu sinh
@@ -112,7 +125,7 @@ app:
     app-folder-name: "NotedApp"
     sync-retry-max-attempts: 5
     sync-job-fixed-delay-ms: 30000   # job nen chay moi 30s
-    sync-debounce-idle-ms: 5000
+    sync-debounce-idle-ms: 5000   # note phai "yen" 5s moi duoc day len Drive
     # URL cua CHINH BACKEND nay, phai KHOP CHINH XAC voi URI da khai bao trong
     # Google Cloud Console (OAuth Client -> Authorized redirect URIs), neu
     # khong Google se tu choi voi loi "redirect_uri_mismatch".
@@ -120,10 +133,30 @@ app:
 
     # URL cua FRONTEND, noi backend redirect trinh duyet VE sau khi hoan tat
     # (thanh cong hoac that bai) luong ket noi Drive. Neu dung nginx reverse
-    # proxy (port 85, xem repo noteText), day chinh la origin cua port do.
+    # proxy thi la origin cua web (production: https://noted.thongtinchinhhieu.site).
     frontend-callback-url: ${DRIVE_FRONTEND_CALLBACK_URL:http://localhost:8200/drive/callback}
 
+  # Soan thao cong tac thoi gian thuc (Yjs qua WebSocket /ws/notes/{id}) - xem
+  # NoteCollabWebSocketHandler va README muc 12.
+  collab:
+    # Message lon nhat nhan tu client (sau khi ghep manh). Trang thai day du cua
+    # 1 note 5MB kem metadata CRDT co the lon hon noi dung kha nhieu.
+    max-message-bytes: ${COLLAB_MAX_MESSAGE_BYTES:16777216}
+    # Client nhan qua cham: hang doi gui cua 1 ket noi vuot nguong -> dong ket noi
+    # do (client tu ket noi lai va dong bo bu), khong de ca phong bi cham theo.
+    send-time-limit-ms: 10000
+    send-buffer-limit-bytes: 16777216
+    idle-timeout-ms: 120000
+    redis:
+      # false = 1 instance, phat trong bo nho (dev). true = phat cheo qua Redis.
+      enabled: ${COLLAB_REDIS_ENABLED:false}
+      channel: noted.collab.room
+
 management:
+  health:
+    redis:
+      # Khong de health bao DOWN chi vi Redis khi tinh nang dang tat
+      enabled: ${COLLAB_REDIS_ENABLED:false}
   endpoints:
     web:
       exposure:

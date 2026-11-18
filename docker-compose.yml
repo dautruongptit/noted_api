@@ -37,6 +37,12 @@ services:
       DB_USER: ${DB_USER:-root}
       DB_PASSWORD: ${DB_PASSWORD:-1234567890}
       SERVER_PORT: ${SERVER_PORT:-8210}
+      # Soan thao cong tac: Redis Pub/Sub phat cheo giua cac instance. infra-redis
+      # phai nam tren shared-db-network (cung mang voi MySQL).
+      COLLAB_REDIS_ENABLED: ${COLLAB_REDIS_ENABLED:-false}
+      REDIS_HOST: ${REDIS_HOST:-infra-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-2}
     ports:
       - "127.0.0.1:8210:8210"
     volumes:

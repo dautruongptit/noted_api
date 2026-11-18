@@ -24,12 +24,12 @@ import java.util.Map;
  * nguoi dung. Khi ket noi lai duoc, client goi endpoint nay 1 lan de day toan bo
  * cac note dang o trang thai "pending_server".
  *
- * Chien luoc giai quyet xung dot: "GIU CA 2 BAN" (doi tu ban dau "ai updatedAt
- * moi hon thang, ban kia bi bo") - khi server phat hien ban cua item nay CU
- * hon ban dang co, KHONG am tham bo/ghi de nua: ban server giu nguyen (van la
- * "ban thang"), con ban local duoc tach thanh 1 note MOI rieng bang
- * NoteService.createConflictCopy() ("ban xung dot", ten co hau to "(xung dot
- * dd/MM HH:mm)") - nguoi dung tu kiem tra/gop lai sau, khong mat du lieu nao.
+ * Chien luoc giai quyet xung dot (tu 2026-09-15): GHI DE, chi giu 1 file goc.
+ * baseVersion lech version server -> van ghi de bang ban trong hang doi va tra
+ * "synced_overwritten" de client keo lai noi dung. Truoc do la "giu ca 2 ban"
+ * (tach note "(xung dot ...)" qua createConflictCopy, status conflict_kept_both) -
+ * da bo cho duong nay, chi con dung o duong Drive (DriveSyncServiceImpl).
+ * Xem giai thich chi tiet trong syncBatch() ben duoi.
  */
 @RestController
 @RequestMapping("/api/sync")

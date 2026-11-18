@@ -11,7 +11,9 @@ public record NoteSummaryResponse(
         String syncState,
         LocalDateTime updatedAt,
         boolean conflictCopy,
-        int version
+        int version,
+        // Doi tai lieu Yjs - client dung de mo dung phong WebSocket va IndexedDB
+        int yjsGeneration
 ) {
     public static NoteSummaryResponse from(Note note) {
         return new NoteSummaryResponse(
@@ -20,7 +22,8 @@ public record NoteSummaryResponse(
                 note.getSyncState().name(),
                 note.getUpdatedAt(),
                 note.isConflictCopy(),
-                note.getVersion()
+                note.getVersion(),
+                note.getYjsGeneration()
         );
     }
 }

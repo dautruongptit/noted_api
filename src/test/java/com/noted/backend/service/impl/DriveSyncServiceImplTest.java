@@ -11,6 +11,7 @@ import com.noted.backend.repository.UserRepository;
 import com.noted.backend.service.FileStorageService;
 import com.noted.backend.service.GoogleDriveService;
 import com.noted.backend.service.NoteService;
+import com.noted.backend.service.YjsDocumentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,7 @@ class DriveSyncServiceImplTest {
     @Mock private FileStorageService fileStorageService;
     @Mock private GoogleDriveService googleDriveService;
     @Mock private NoteService noteService;
+    @Mock private YjsDocumentService yjsDocumentService;
     @Mock private Drive drive;
 
     private DriveSyncServiceImpl service;
@@ -49,7 +51,7 @@ class DriveSyncServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new DriveSyncServiceImpl(noteRepository, userRepository, fileStorageService, googleDriveService, noteService);
+        service = new DriveSyncServiceImpl(noteRepository, userRepository, fileStorageService, googleDriveService, noteService, yjsDocumentService);
         ReflectionTestUtils.setField(service, "maxAttempts", 5);
         // "self" (@Lazy @Autowired, chi co gia tri that trong container Spring
         // that su) - trong unit test khong co proxy nao ca, tro thang ve chinh

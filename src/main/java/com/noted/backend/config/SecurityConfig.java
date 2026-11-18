@@ -62,6 +62,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/drive/callback").permitAll()
+                        // WebSocket soan thao cong tac: NoteCollabWebSocketHandler tu xac thuc
+                        // JWT trong Sec-WebSocket-Protocol (trinh duyet khong gui duoc header
+                        // Authorization cho WebSocket), Origin kiem o WebSocketConfig.
+                        .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 )
