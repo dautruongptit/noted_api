@@ -253,7 +253,14 @@ public class NoteCollabWebSocketHandler extends BinaryWebSocketHandler implement
         } catch (RuntimeException e) {
             // Loi ghi file/DB: noi dung van an toan trong log Yjs, chi file .txt chua
             // cap nhat. Bao cho client hien "Luu that bai", lan go tiep se thu lai.
-            log.warn("Ghi snapshot note {} that bai: {}", state.getNoteId(), e.getMessage());
+            // In ca loi GOC (VD AccessDeniedException + duong dan): "Ghi file that bai"
+            // khong thoi khong du de biet la sai quyen thu muc, het dia hay gi khac.
+            Throwable root = e;
+            while (root.getCause() != null && root.getCause() != root) {
+                root = root.getCause();
+            }
+            log.warn("Ghi snapshot note {} that bai: {} | goc: {}: {}", state.getNoteId(), e.getMessage(),
+                    root.getClass().getSimpleName(), root.getMessage());
             NoteRoomRegistry.send(session, YjsProtocol.encodeSnapshotAck(YjsProtocol.SNAPSHOT_ACK_REJECTED, 0));
             return;
         }
