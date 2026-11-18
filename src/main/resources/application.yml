@@ -36,12 +36,20 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
 
+  # Flyway TU CHAY moi lan app khoi dong, TRUOC khi Hibernate kiem tra schema
+  # (ddl-auto: validate): file V<so>__<mo ta>.sql nao trong db/migration chua co
+  # trong bang flyway_schema_history se duoc ap theo thu tu so phien ban. Them
+  # thay doi schema = them 1 file V moi (so lon hon so lon nhat dang co), KHONG
+  # sua file da chay. Migration loi -> app dung khoi dong (khong chay voi schema do dang).
   flyway:
     enabled: true
     locations: classpath:db/migration
-    repair-check-checksum: false
     baseline-on-migrate: true # Tự động tạo bảng lịch sử nếu DB đã có sẵn dữ liệu từ trước
     validate-on-migrate: false # Tắt validate checksum để tránh lỗi mismatch khi sửa file V1
+    # File dat ten sai quy uoc (VD thieu "__") mac dinh bi Flyway BO QUA AM THAM -
+    # tung xay ra voi V4_20260524_create_login_histories.sql (khong bao gio chay).
+    # Bat de app bao loi ngay khi khoi dong thay vi lang le thieu bang.
+    validate-migration-naming: true
   security:
     oauth2:
       client:

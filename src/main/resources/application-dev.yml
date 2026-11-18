@@ -9,14 +9,9 @@
 spring:
   jpa:
     show-sql: true   # in ra console cau SQL that su Hibernate chay - tien debug query luc dev
-    repair-check-checksum: false
-    flyway:
-      enabled: true
-      # Tự động thực hiện repair để cập nhật lại checksum nếu có sự thay đổi
-      repair-check-checksum: false
-      repair-check-sum-on-save: true
-      baseline-on-migrate: true
-      clean-disabled: false
+  # Flyway dung chung cau hinh trong application.yml (tu migrate khi khoi dong).
+  # Truoc day o day co 1 khoi "flyway" dat nham duoi "jpa" - Spring bo qua toan
+  # bo, nen da xoa cho do gay hieu nham.
 logging:
   level:
     com.noted.backend: DEBUG

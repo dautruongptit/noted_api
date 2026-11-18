@@ -25,3 +25,6 @@ logging:
     com.noted.backend: INFO
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
+    # Giu log Flyway luc khoi dong ("Migrating schema ... to version N" / "Schema
+    # is up to date") de biet migration moi da chay that hay chua.
+    org.flywaydb: INFO

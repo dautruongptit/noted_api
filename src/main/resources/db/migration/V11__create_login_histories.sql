@@ -1,5 +1,9 @@
 -- ============================================================
--- V4_20260524_create_login_histories.sql
+-- V11__create_login_histories.sql
+--
+-- Truoc day ten la "V4_20260524_create_login_histories.sql": thieu "__" nen Flyway
+-- bo qua am tham, bang nay tung phai tao tay. Doi thanh V11 de Flyway quan ly.
+-- An toan khi bang DA ton tai: CREATE TABLE IF NOT EXISTS khong lam gi ca.
 -- Tao bang: login_histories
 -- FK: user_id → users(id)
 -- ============================================================

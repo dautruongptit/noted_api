@@ -341,6 +341,18 @@ Chạy không qua Docker (IDE/Maven): đặt các biến trong `.env` vào môi 
 `mvn spring-boot:run`. `SPRING_PROFILES_ACTIVE=dev` nạp thêm `application-dev.yml` (log SQL,
 log security DEBUG); `prod` nạp `application-prod.yml` (log gọn).
 
+**Migration DB tự chạy khi khởi động (Flyway).** Mỗi lần app start, Flyway áp mọi file
+`src/main/resources/db/migration/V<số>__<mô tả>.sql` chưa có trong bảng `flyway_schema_history`
+theo thứ tự số phiên bản. Việc này chạy **trước** khi Hibernate kiểm tra schema
+(`ddl-auto: validate`). Nếu một migration lỗi, app dừng khởi động thay vì chạy với schema dở dang.
+- Muốn đổi schema thì thêm file `V` mới, số lớn hơn số lớn nhất đang có. **Không sửa** file đã
+  chạy.
+- File sai mẫu tên trước đây bị Flyway bỏ qua âm thầm. Giờ bật `validate-migration-naming` để app
+  báo lỗi ngay. `MigrationNamingTest` còn chặn từ lúc chạy test, kể cả trường hợp trùng số phiên bản.
+- Migration được đóng vào file jar, nên khi có file mới phải **build lại image**:
+  `docker compose up -d --build`. Chỉ restart container cũ thì không chạy file mới.
+- Kiểm tra trong log khởi động: `Migrating schema ... to version N` hoặc `Schema ... is up to date`.
+
 ⚠️ Nếu thiếu biến DB, `application.yml` và `docker-compose.yml` rơi về giá trị mặc định ghi cứng
 (IP host và mật khẩu DB) thay vì báo lỗi — luôn kiểm tra `.env` đủ biến.
 
@@ -415,9 +427,9 @@ Còn thiếu / dở dang thật sự (đã đọc trực tiếp code để xác 
 - 🧪 Chưa có unit test cho `RateLimitInterceptor`/`TokenBucket`/`JwtTokenProvider`.
 - 🔐 HTTPS hiện do Cloudflare Tunnel đảm nhận (app chạy HTTP sau tunnel). Chưa có CI/CD,
   integration test (Testcontainers + MockMvc).
-- 🗃️ Bảng `login_histories` (entity `LoginHistory`): file migration tên
-  `V4_20260524_create_login_histories.sql` **thiếu dấu `__`** theo quy ước Flyway
-  (`V<version>__<mô tả>.sql`) — cần kiểm tra Flyway có thực sự chạy file này không.
+- 🗃️ Bảng `login_histories`: file migration cũ `V4_20260524_create_login_histories.sql` thiếu
+  `__` nên Flyway chưa từng chạy nó. Đã đổi tên thành `V11__create_login_histories.sql`
+  (`CREATE TABLE IF NOT EXISTS`, nên DB đã có bảng thì Flyway chỉ ghi nhận, không làm gì thêm).
 - 🔑 Giá trị mặc định ghi cứng IP và mật khẩu DB trong `application.yml`/`docker-compose.yml` (xem mục 10).
 
 ## 12. Soạn thảo cộng tác thời gian thực (Yjs CRDT qua WebSocket)
